@@ -2,10 +2,11 @@ from collections import defaultdict
 import math
 
 class UnigramModel:
-    def __init__(self):
+    def __init__(self, alpha=0):
         self.initial = {}
         self.finalTokenCount = {}
         self.totalTokens = 0
+        self.alpha = alpha
     
     def train(self, file):
         stop = 0
@@ -63,7 +64,8 @@ class UnigramModel:
         print(math.exp(-prob/(ct+numStops)))
 
 class BigramModel:
-    def __init__(self):
+    def __init__(self, alpha=0):
+        self.alpha = alpha
         self.initial = {}
         self.finalTokenCount = defaultdict(int)
         self.totalTokens = 0
@@ -130,3 +132,8 @@ class BigramModel:
             if self.finalTokenCount[prev] != 0 and self.finalBigramCount[prev]["<STOP>"] != 0:
                 prob += math.log(self.finalBigramCount[prev]["<STOP>"]/self.finalTokenCount[prev])
         print(math.exp(-prob/(ct+numStops)))
+
+
+class TrigramModel():
+    def __init__(self, alpha=0):
+        return
