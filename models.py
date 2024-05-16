@@ -49,7 +49,23 @@ class UnigramModel:
                 # add this tokens probability to total (via addtion since using logspace)
                 prob += math.log(count / adjusted_total) 
         return math.exp(-prob / token_count)
-    
+    def smoothperplexity(self, file, alpha):
+        prob = 0
+        ct = 0
+        numStops = 0
+        for i in file:
+            tokens = i.split()
+            numStops += 1
+            for j in tokens:
+                ct += 1
+                if j in self.finalTokenCount:
+                    adjustedCount = (self.finalTokenCount[j] + alpha) * (self.totalTokens)
+                    prob += math.log(adjustedCount/ (self.totalTokens * len(self.finalTokenCount)))
+                else:
+                    adjustedCount = (self.finalTokenCount["<UNK>"] + alpha) * (self.totalTokens)
+                    prob += math.log(adjustedCount/ (self.totalTokens * len(self.finalTokenCount)))
+        prob += math.log(((self.finalTokenCount["<STOP>"]+alpha)*self.totalTokens)/(self.totalTokens * len(self.finalTokenCount)))
+        print(math.exp(-prob/(ct+numStops)))
     
 class BigramModel:
     def __init__(self, alpha=0):
@@ -121,12 +137,6 @@ class BigramModel:
                 prob += math.log(self.finalBigramCount[prev]["<STOP>"]/self.finalTokenCount[prev])
         print(math.exp(-prob/(ct+numStops)))
 
-<<<<<<< HEAD
-
-class TrigramModel():
-    def __init__(self, alpha=0):
-        return
-=======
     def smoothperplexity(self, file, alpha):
         log_prob = 0.0
         num_tokens = 0
@@ -225,5 +235,3 @@ class TrigramModel:
         perplexity_value = math.exp(-prob / (ct + numStops))
         print(perplexity_value)
         return perplexity_value
-
->>>>>>> f6729c2 (Update models.py)
