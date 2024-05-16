@@ -14,12 +14,7 @@ def main():
         print("Negative number passed to --smoothing; defaulting to 0")
         args.smoothing = 0
 
-    # Load data
-    with open('1b_benchmark.train.tokens', 'r', encoding='utf8') as train_file:
-        train_data = train_file.read()
-    with open("1b_benchmark.dev.tokens", 'r', encoding='utf8') as test_file:
-        test_data = test_file.read()
-
+    # set model type
     if args.model == "Unigram":
         model = UnigramModel(args.smoothing)
     elif args.model == "Bigram":
@@ -28,17 +23,23 @@ def main():
         model = TrigramModel(args.smoothing)
     else:
         raise Exception("Pass Unigram, Bigram, or Trigram to --model")
+    
+    print(args)
 
-    model.train(train_data)
-    model.perplexity(test_data)
+    # load data and train model
+    with open('data/1b_benchmark.train.tokens', 'r', encoding='utf8') as train_file:
+        model.train(train_file)
+    
+    # load dev set and calculate perplexity
+    with open("data/1b_benchmark.dev.tokens", 'r', encoding='utf8') as test_file:
+        model.perplexity(test_file)
 
-    '''model = UnigramModel()
-    model.train(traindata)
-    model.smoothperplexity(testdata, 1)
-    model = BigramModel()
-    model.train(train_data)
-    model.perplexity(test_data)
-    '''
+    # use debug set as frame of reference
+    with open("data/debug.tokens", 'r', encoding='utf8') as debug_file:
+        perplexity = model.perplexity(debug_file)
+
+    print("Perplexity: ", perplexity)
+
 
 if __name__ == '__main__':
     main()
