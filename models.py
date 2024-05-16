@@ -3,65 +3,55 @@ import math
 
 class UnigramModel:
     def __init__(self, alpha=0):
-        self.initial = {}
-        self.finalTokenCount = {}
-        self.totalTokens = 0
+        self.token_counts = {}
+        self.total_tokens = 0
         self.alpha = alpha
+        self.vocab_size = 0
     
-    def train(self, file):
-        stop = 0
-        unk = 0
-        for i in file:
-            tokens = i.split()
-            for j in tokens:
-                if j in self.initial:
-                    self.initial[j] += 1
-                else:
-                    self.initial[j] = 1
-            stop += 1
-        for i in self.initial:
-            if self.initial[i] >= 3:
-                self.finalTokenCount[i] = self.initial[i]
-                self.totalTokens += self.initial[i]
-            else:
-                unk += self.initial[i]
-        self.finalTokenCount.update({"<UNK>":unk})
-        self.finalTokenCount.update({"<STOP>":stop})
-        self.totalTokens = self.totalTokens + unk + stop
+    def train(self, file_stream):
+        # get token counts from training data
+        raw_counts = defaultdict(int)
+        for line in file_stream:
+            tokens = line.strip().split() + ["<STOP>"]
+            for token in tokens:
+                raw_counts[token] += 1
 
-    def perplexity(self, file):
+        # save counts and convert low-frequency tokens to <UNK>
+        unk_count = 0
+        for token, count in raw_counts.items():
+            if count < 3:
+                unk_count += count
+            else:
+                self.token_counts[token] = count
+
+        if unk_count > 0:
+            self.token_counts["<UNK>"] = unk_count
+
+        self.vocab_size = len(self.token_counts)
+        self.total_tokens = sum(self.token_counts.values()) 
+
+        # debug purposes
+        print(self.total_tokens)
+        print(self.vocab_size)
+        print(len(self.token_counts))
+
+    def perplexity(self, file_stream):
         prob = 0
-        ct = 0
-        numStops = 0
-        for i in file:
-            tokens = i.split()
-            numStops += 1
-            for j in tokens:
-                ct += 1
-                if j in self.finalTokenCount:
-                    prob += math.log(self.finalTokenCount[j] / self.totalTokens)
-                else:
-                    prob += math.log(self.finalTokenCount["<UNK>"] / self.totalTokens)
-        prob += math.log(self.finalTokenCount["<STOP>"]/self.totalTokens)
-        print(math.exp(-prob/(ct+numStops)))
+        token_count = 0
+        # recalculate total tokens accounting for smoothing (or lack thereof)
+        adjusted_total = self.total_tokens + self.alpha * self.vocab_size
+        for line in file_stream:
+            tokens = line.strip().split() + ["<STOP>"]
+            for token in tokens:
+                token_count += 1 # keep track of total tokens in this eval set
+                # get count of this token if present in train vocab, else it's <UNK>
+                count = self.token_counts.get(token, self.token_counts.get("<UNK>", 0)) + self.alpha
+                # add this tokens probability to total (via addtion since using logspace)
+                prob += math.log(count / adjusted_total) 
+        return math.exp(-prob / token_count)
     
-    def smoothperplexity(self, file, alpha):
-        prob = 0
-        ct = 0
-        numStops = 0
-        for i in file:
-            tokens = i.split()
-            numStops += 1
-            for j in tokens:
-                ct += 1
-                if j in self.finalTokenCount:
-                    adjustedCount = (self.finalTokenCount[j] + alpha) * (self.totalTokens)
-                    prob += math.log(adjustedCount/ (self.totalTokens * len(self.finalTokenCount)))
-                else:
-                    adjustedCount = (self.finalTokenCount["<UNK>"] + alpha) * (self.totalTokens)
-                    prob += math.log(adjustedCount/ (self.totalTokens * len(self.finalTokenCount)))
-        prob += math.log(((self.finalTokenCount["<STOP>"]+alpha)*self.totalTokens)/(self.totalTokens * len(self.finalTokenCount)))
-        print(math.exp(-prob/(ct+numStops)))
+    
+
 
 class BigramModel:
     def __init__(self, alpha=0):
