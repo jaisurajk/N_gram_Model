@@ -51,8 +51,6 @@ class UnigramModel:
         return math.exp(-prob / token_count)
     
     
-
-
 class BigramModel:
     def __init__(self, alpha=0):
         self.alpha = alpha
@@ -123,7 +121,109 @@ class BigramModel:
                 prob += math.log(self.finalBigramCount[prev]["<STOP>"]/self.finalTokenCount[prev])
         print(math.exp(-prob/(ct+numStops)))
 
+<<<<<<< HEAD
 
 class TrigramModel():
     def __init__(self, alpha=0):
         return
+=======
+    def smoothperplexity(self, file, alpha):
+        log_prob = 0.0
+        num_tokens = 0
+        vocab_size = len(self.finalTokenCount)
+    
+        for line in file:
+            tokens = ['<START>'] + line.split() + ['<STOP>']
+            prev_token = '<START>'
+            num_tokens += 1
+    
+            for curr_token in tokens[1:]:
+                num_tokens += 1
+                bigram_count = self.finalBigramCount[prev_token].get(curr_token, 0)
+                unigram_count = self.finalTokenCount[prev_token]
+    
+                smoothed_prob = (bigram_count + alpha) / (unigram_count + alpha * vocab_size)
+                log_prob += math.log(smoothed_prob)
+    
+                prev_token = curr_token
+    
+        perplexity = 2 ** (-log_prob / num_tokens)
+        print(perplexity)
+
+class TrigramModel:
+    def __init__(self):
+        self.initial = Counter()
+        self.finalTokenCount = Counter()
+        self.finalBigramCount = defaultdict(lambda: Counter())
+        self.finalTrigramCount = defaultdict(lambda: defaultdict(lambda: Counter()))
+        self.totalTokens = 0
+
+    def train(self, sentences):
+        """
+        Train the model using a list of sentences.
+        
+        Args:
+            sentences (list of str): List of sentences to train the model.
+        """
+        stop = 0
+        for sentence in sentences:
+            tokens = sentence.split()
+            self.initial.update(tokens)
+            stop += 1
+        
+        unk = 0
+        for token, count in self.initial.items():
+            if count >= 3:
+                self.finalTokenCount[token] = count
+                self.totalTokens += count
+            else:
+                unk += count
+
+        self.finalTokenCount["<UNK>"] = unk
+        self.finalTokenCount["<STOP>"] = stop
+        self.totalTokens += unk + stop
+
+        for sentence in sentences:
+            tokens = ["<START>", "<START>"] + sentence.split() + ["<STOP>"]
+            for i in range(len(tokens) - 2):
+                first = tokens[i] if tokens[i] in self.finalTokenCount else "<UNK>"
+                second = tokens[i+1] if tokens[i+1] in self.finalTokenCount else "<UNK>"
+                third = tokens[i+2] if tokens[i+2] in self.finalTokenCount else "<UNK>"
+                self.finalBigramCount[first][second] += 1
+                self.finalTrigramCount[first][second][third] += 1
+
+    def perplexity(self, sentences):
+        """
+        Calculate the perplexity of the model on a list of sentences.
+        
+        Args:
+            sentences (list of str): List of sentences to calculate perplexity on.
+        
+        Returns:
+            float: The perplexity value.
+        """
+        prob = 0
+        ct = 0
+        numStops = 0
+
+        for sentence in sentences:
+            tokens = ["<START>", "<START>"] + sentence.split() + ["<STOP>"]
+            numStops += 1
+            for i in range(2, len(tokens)):
+                ct += 1
+                first = tokens[i-2] if tokens[i-2] in self.finalTokenCount else "<UNK>"
+                second = tokens[i-1] if tokens[i-1] in self.finalTokenCount else "<UNK>"
+                third = tokens[i] if tokens[i] in self.finalTokenCount else "<UNK>"
+                
+                if self.finalTrigramCount[first][second][third] > 0:
+                    trigram_count = self.finalTrigramCount[first][second][third]
+                    bigram_count = self.finalBigramCount[first][second]
+                    prob += math.log(trigram_count / bigram_count)
+                else:
+                    prob += math.log(self.finalTrigramCount[first][second]["<UNK>"] / self.finalBigramCount[first][second])
+        
+        perplexity_value = math.exp(-prob / (ct + numStops))
+        print(perplexity_value)
+        return perplexity_value
+
+>>>>>>> f6729c2 (Update models.py)
