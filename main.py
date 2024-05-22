@@ -4,9 +4,9 @@ import argparse
 def main():
     # Get command-line args
     parser = argparse.ArgumentParser()
-    parser.add_argument('--model', '-m', type=str, default='Unigram',
-                        choices=['Unigram', 'Bigram', 'Trigram'])
+    parser.add_argument('--model', '-m', type=str, default='Unigram', choices=['Unigram', 'Bigram', 'Trigram'])
     parser.add_argument('--smoothing', '-s', type=float, default=0)
+    parser.add_argument('--interpolate', '-i', type=int, default=0)
     args = parser.parse_args()
 
     # Ensure smoothing argument is non-negative
@@ -20,7 +20,7 @@ def main():
     elif args.model == "Bigram":
         model = BigramModel(args.smoothing)
     elif args.model == "Trigram":
-        model = TrigramModel(args.smoothing)
+        model = TrigramModel(args.smoothing, args.interpolate)
     else:
         raise Exception("Pass Unigram, Bigram, or Trigram to --model")
     
@@ -32,12 +32,12 @@ def main():
             train_file.seek(0)
             print("train perplexity: " + str(model.perplexity(train_file)))
     
-    # load dev set and calculate perplexity
     with open("data/1b_benchmark.dev.tokens", 'r', encoding='utf8') as dev_file:
             print("dev perplexity: " + str(model.perplexity(dev_file)))
 
+    with open("data/1b_benchmark.test.tokens", 'r', encoding='utf8') as test_file:
+            print("test perplexity: " + str(model.perplexity(test_file)))
 
-    # use debug set as frame of reference
     with open("data/debug.tokens", 'r', encoding='utf8') as debug_file:
             print("debug perplexity: " + str(model.perplexity(debug_file)))
 
