@@ -1,4 +1,4 @@
-from collections import defaultdict
+from collections import Counter, defaultdict
 import math
 
 class UnigramModel:
@@ -125,6 +125,8 @@ class BigramModel:
             numStops += 1
             prev = None
             for j in tokens:
+                if j not in self.finalTokenCount:
+                    j = "<UNK>"
                 ct += 1
                 if prev == None:
                     if j in self.finalBigramCount["<START>"]:
@@ -192,15 +194,25 @@ class TrigramModel:
         self.finalTokenCount["<UNK>"] = unk
         self.finalTokenCount["<STOP>"] = stop
         self.totalTokens += unk + stop
-
+        sentences.seek(0)
         for sentence in sentences:
             tokens = ["<START>", "<START>"] + sentence.split() + ["<STOP>"]
             for i in range(len(tokens) - 2):
-                first = tokens[i] if tokens[i] in self.finalTokenCount else "<UNK>"
-                second = tokens[i+1] if tokens[i+1] in self.finalTokenCount else "<UNK>"
+                first = tokens[i]
+                second = tokens[i+1]
                 third = tokens[i+2] if tokens[i+2] in self.finalTokenCount else "<UNK>"
-                self.finalBigramCount[first][second] += 1
-                self.finalTrigramCount[first][second][third] += 1
+                if first == "<START>" and second == "<START>":
+                    self.finalTrigramCount["<START>"]["<START>"][third] += 1
+                    self.finalBigramCount[first][second] += 1
+                elif first == "<START>" and second != "<START>":
+                    second = tokens[i+1] if tokens[i+1] in self.finalTokenCount else "<UNK>"
+                    self.finalTrigramCount["<START>"][second][third] += 1
+                    self.finalBigramCount[first][second] += 1
+                else:
+                    first = tokens[i] if tokens[i] in self.finalTokenCount else "<UNK>"
+                    second = tokens[i+1] if tokens[i+1] in self.finalTokenCount else "<UNK>"
+                    self.finalTrigramCount[first][second][third] += 1
+                    self.finalBigramCount[first][second] += 1
 
     def perplexity(self, sentences):
         """
@@ -213,25 +225,28 @@ class TrigramModel:
             float: The perplexity value.
         """
         prob = 0
-        ct = 0
-        numStops = 0
-
+        totaltokens = 0
         for sentence in sentences:
-            tokens = ["<START>", "<START>"] + sentence.split() + ["<STOP>"]
-            numStops += 1
-            for i in range(2, len(tokens)):
-                ct += 1
-                first = tokens[i-2] if tokens[i-2] in self.finalTokenCount else "<UNK>"
-                second = tokens[i-1] if tokens[i-1] in self.finalTokenCount else "<UNK>"
-                third = tokens[i] if tokens[i] in self.finalTokenCount else "<UNK>"
-                
-                if self.finalTrigramCount[first][second][third] > 0:
-                    trigram_count = self.finalTrigramCount[first][second][third]
-                    bigram_count = self.finalBigramCount[first][second]
-                    prob += math.log(trigram_count / bigram_count)
+            tokens = sentence.split()
+            tokens = ["<START>", "<START>"] + tokens + ["<STOP>"]
+            totaltokens += len(tokens) - 2 #minus the 2 start tokens
+
+            for i in range(len(tokens) - 2):
+                first, second = (tokens[i], tokens[i+1])
+                third = tokens[i+2] if tokens[i+2] in self.finalTokenCount else "<UNK>"
+                # for the probability of the token immediately following <START> in the trigram
+                # model, you use the bigram probability. So in this example, you use the bigram p(HDTV| <START>) in the
+                # trigram model for the probability of HDTV.
+                if(first == "<START>" and second == "<START>"):
+                    if self.finalBigramCount[second][third] != 0:
+                        prob += math.log(self.finalBigramCount[second][third] / self.finalTokenCount["<STOP>"])
                 else:
-                    prob += math.log(self.finalTrigramCount[first][second]["<UNK>"] / self.finalBigramCount[first][second])
-        
-        perplexity_value = math.exp(-prob / (ct + numStops))
-        print(perplexity_value)
-        return perplexity_value
+                    second = tokens[i+1] if tokens[i+1] in self.finalTokenCount else "<UNK>"
+                    if first == "<START>":
+                        if self.finalTrigramCount[first][second][third] != 0 and self.finalBigramCount[first][second] != 0:
+                            prob += math.log(self.finalTrigramCount[first][second][third] / self.finalBigramCount[first][second])
+                    else:
+                        first = tokens[i] if tokens[i] in self.finalTokenCount else "<UNK>"
+                        if self.finalTrigramCount[first][second][third] != 0 and self.finalBigramCount[first][second] != 0:
+                            prob += math.log(self.finalTrigramCount[first][second][third] / self.finalBigramCount[first][second])
+        print(math.exp(-prob/totaltokens))
