@@ -32,7 +32,7 @@ class UnigramModel:
     #calculates the unigram log probability for a token
     def unigram_mle(self, token):
         count = self.token_counts.get(token, self.token_counts.get("<UNK>", 0)) + self.alpha
-        return math.log(count/(self.totalTokens + self.alpha * self.vocab_size))
+        return count/(self.totalTokens + self.alpha * self.vocab_size)
     
     def perplexity(self, file_stream):
         prob = 0
@@ -41,7 +41,7 @@ class UnigramModel:
             tokens = line.split() + ["<STOP>"]
             for token in tokens:
                 token_count += 1 
-                prob += self.unigram_mle(token)
+                prob += math.log(self.unigram_mle(token))
         return math.exp(-prob / token_count)
     
 class BigramModel:
@@ -99,18 +99,17 @@ class BigramModel:
         #case for token at the start of the sentence
         if prev == "<START>":
             if token in self.finalBigramCount["<START>"]:
-                print((self.finalBigramCount["<START>"][token] + self.alpha)/(self.finalTokenCount["<STOP>"] + adjusted_total))
-                return math.log((self.finalBigramCount["<START>"][token] + self.alpha)/(self.finalTokenCount["<STOP>"] + adjusted_total))
+                return (self.finalBigramCount["<START>"][token] + self.alpha)/(self.finalTokenCount["<STOP>"] + adjusted_total)
             else: #if the bigram hasn't been seen before
                 if self.alpha != 0: #smoothing if enabled
-                    return math.log(self.alpha/(self.finalTokenCount["<STOP>"] + adjusted_total))
+                    return self.alpha/(self.finalTokenCount["<STOP>"] + adjusted_total)
         #case for rest of the tokens
         else:
             if prev in self.finalBigramCount and token in self.finalBigramCount[prev]:
-                return math.log((self.finalBigramCount[prev][token] + self.alpha)/(self.finalTokenCount[prev] + adjusted_total))
+                return (self.finalBigramCount[prev][token] + self.alpha)/(self.finalTokenCount[prev] + adjusted_total)
             else: #if the bigram hasn't been seen before
                 if self.alpha != 0: #smoothing if enabled
-                    return math.log(self.alpha/(self.finalTokenCount[prev] + adjusted_total))
+                    return self.alpha/(self.finalTokenCount[prev] + adjusted_total)
         return 0 
                 
     def perplexity(self, file):
@@ -124,32 +123,32 @@ class BigramModel:
             for token in tokens:
                 if token not in self.finalTokenCount:
                     token = "<UNK>"
-                prob += self.bigram_mle(token, prev, adjusted_total)
+                if self.bigram_mle(token, prev, adjusted_total) != 0:
+                    prob += math.log(self.bigram_mle(token, prev, adjusted_total))
                 prev = token
         return math.exp(-prob/(token_ct))
 
 class TrigramModel:
-    def __init__(self, alpha=0):
+    def __init__(self, alpha=0, interpolate=0):
         self.initial = Counter()
         self.finalTokenCount = defaultdict(int)
         self.finalBigramCount = defaultdict(lambda: defaultdict(int))
         self.finalTrigramCount = defaultdict(lambda: defaultdict(lambda: defaultdict(int)))
         self.totalTokens = 0
         self.alpha = alpha
-        self.Unigram = UnigramModel()
-        self.Bigram = BigramModel()
+        self.interpolate = False
+        if interpolate:
+            self.Unigram = UnigramModel()
+            self.Bigram = BigramModel()
+            self.interpolate = True
+            print("interpolated perplexity")
 
     def train(self, sentences):
-        """
-        Train the model using a list of sentences.
-        
-        Args:
-            sentences (list of str): List of sentences to train the model.
-        """
-        self.Unigram.train(sentences)
-        sentences.seek(0)
-        self.Bigram.train(sentences)
-        sentences.seek(0)
+        if self.interpolate:
+            self.Unigram.train(sentences)
+            sentences.seek(0)
+            self.Bigram.train(sentences)
+            sentences.seek(0)
         stop = 0
         unk = 0
         #get initial token counts
@@ -189,25 +188,25 @@ class TrigramModel:
         # for the probability of the token immediately following <START> in the trigram model, use the bigram probability
         if first == "<START>" and second == "<START>": #<START><START><X>
             if self.finalBigramCount["<START>"][third] != 0:
-                return math.log((self.finalBigramCount[second][third]+self.alpha) / (self.finalTokenCount["<STOP>"]+adjusted_total))
+                return (self.finalBigramCount[second][third]+self.alpha) / (self.finalTokenCount["<STOP>"]+adjusted_total)
             else:
                 if self.alpha != 0: #smoothing if enabled
-                    return math.log(self.alpha/(self.finalTokenCount["<STOP>"]+adjusted_total))
+                    return self.alpha/(self.finalTokenCount["<STOP>"]+adjusted_total)
         else:
             second = tokens[i+1] if tokens[i+1] in self.finalTokenCount else "<UNK>"
             if first == "<START>": #<START><X><Y>
                 if self.finalTrigramCount[first][second][third] != 0 and self.finalBigramCount[first][second] != 0:
-                    return math.log((self.finalTrigramCount[first][second][third]+self.alpha) / (self.finalBigramCount[first][second]+adjusted_total))
+                    return (self.finalTrigramCount[first][second][third]+self.alpha) / (self.finalBigramCount[first][second]+adjusted_total)
                 else:
                     if self.alpha != 0: #smoothing if enabled
-                        return math.log(self.alpha/(self.finalBigramCount[first][second]+adjusted_total))
+                        return self.alpha/(self.finalBigramCount[first][second]+adjusted_total)
             else: #<X><Y><Z>
                 first = tokens[i] if tokens[i] in self.finalTokenCount else "<UNK>"
                 if self.finalTrigramCount[first][second][third] != 0 and self.finalBigramCount[first][second] != 0:
-                    return math.log((self.finalTrigramCount[first][second][third]+self.alpha) / (self.finalBigramCount[first][second]+adjusted_total))
+                    return (self.finalTrigramCount[first][second][third]+self.alpha) / (self.finalBigramCount[first][second]+adjusted_total)
                 else:
                     if self.alpha != 0: #smoothing if enabled
-                        return math.log(self.alpha/(self.finalBigramCount[first][second]+adjusted_total))
+                        return self.alpha/(self.finalBigramCount[first][second]+adjusted_total)
         return 0
                     
     def perplexity(self, sentences):
@@ -219,6 +218,16 @@ class TrigramModel:
             tokens = ["<START>", "<START>"] + tokens + ["<STOP>"]
             token_ct += len(tokens) - 2 #minus the 2 start tokens
             for i in range(len(tokens) - 2):
-                prob += self.trigram_mle(tokens, i, adjusted_total)
-                #print(prob)
+                if tokens[i+2] not in self.finalTokenCount:
+                    tokens[i+2] = "<UNK>"
+                if self.interpolate:
+                    unigramle = self.Unigram.unigram_mle(tokens[i+2])
+                    bigramle = self.Bigram.bigram_mle(tokens[i+2], tokens[i+1], adjusted_total)
+                    trigramle = self.trigram_mle(tokens, i, adjusted_total)
+                    if self.trigram_mle(tokens, i, adjusted_total) != 0 and unigramle != 0 and bigramle != 0:
+                        prob += math.log(0.01*(unigramle) + 0.4*bigramle + 0.59*trigramle)
+                else:
+                    trigramle = self.trigram_mle(tokens, i, adjusted_total)
+                    if trigramle != 0:
+                        prob += math.log(self.trigram_mle(tokens, i, adjusted_total))
         return math.exp(-prob/token_ct)
